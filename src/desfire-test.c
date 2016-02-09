@@ -24,6 +24,58 @@
 
 #include <freefare.h>
 
+uint8_t key_data_null[8]  = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+uint8_t key_data_des[8]   = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H' };
+uint8_t key_data_3des[16] = { 'C', 'a', 'r', 'd', ' ', 'M', 'a', 's', 't', 'e', 'r', ' ', 'K', 'e', 'y', '!' };
+uint8_t key_data_aes[16]  = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+uint8_t key_data_3k3des[24]  = { 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+
+const uint8_t key_data_aes_version = 0x42;
+
+int mifare_desfire_auto_authenticate (FreefareTag tag, uint8_t key_no, MifareDESFireKey key)
+{
+    /* Determine which key is currently the master one */
+    uint8_t key_version;
+    int res = mifare_desfire_get_key_version (tag, key_no, &key_version);
+
+    printf("key_version: %x\n", key_version);
+    switch (key_version) {
+        case 0x00:
+          key = mifare_desfire_des_key_new_with_version (key_data_null);
+        break;
+        case 0x42:
+          key = mifare_desfire_aes_key_new_with_version (key_data_aes, key_data_aes_version);
+        break;
+        case 0xAA:
+          key = mifare_desfire_des_key_new_with_version (key_data_des);
+        break;
+        case 0xC7:
+          key = mifare_desfire_3des_key_new_with_version (key_data_3des);
+        break;
+        case 0x55:
+          key = mifare_desfire_3k3des_key_new_with_version (key_data_3k3des);
+        break;
+    }
+
+    /* Authenticate with this key */
+    switch (key_version) {
+        case 0x00:
+        case 0xAA:
+        case 0xC7:
+            res = mifare_desfire_authenticate (tag, key_no, key);
+        break;
+        case 0x55:
+            res = mifare_desfire_authenticate_iso (tag, key_no, key);
+        break;
+        case 0x42:
+            res = mifare_desfire_authenticate_aes (tag, key_no, key);
+        break;
+    }
+
+    return res;
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -61,84 +113,50 @@ main(int argc, char *argv[])
 	}
 
 	for (int i = 0; (!error) && tags[i]; i++) {
+
 	    if (MIFARE_DESFIRE != freefare_get_tag_type (tags[i]))
 		continue;
 
 	    int res;
 	    char *tag_uid = freefare_get_tag_uid (tags[i]);
 
-	    struct mifare_desfire_version_info info;
-
 	    res = mifare_desfire_connect (tags[i]);
 	    if (res < 0) {
             warnx ("Can't connect to Mifare DESFire target.");
             error = 1;
             break;
-	    }
-
-	    res = mifare_desfire_get_version (tags[i], &info);
-	    if (res < 0) {
-            freefare_perror (tags[i], "mifare_desfire_get_version");
-            error = 1;
-            break;
-	    }
+	    }else{
+            printf("Connected uid: %s\n", tag_uid);
+        }
 
         uint8_t key_version;
-        int res1 = mifare_desfire_get_key_version (tags[i], 0, &key_version);
+        mifare_desfire_get_key_version (tags[i], 0, &key_version);
+        MifareDESFireKey key = malloc(sizeof(MifareDESFireKey));
 
+        res = mifare_desfire_auto_authenticate(tags[i], 0, key);
 
-        printf("version: %d\n", key_version);
+        if(res < 0){
+            printf("Error while geting the master key.....\n"); 
+            break;
+        }
 
-	    printf ("===> Version information for tag %s:\n", tag_uid);
-	    printf ("UID:                      0x%02x%02x%02x%02x%02x%02x%02x\n", info.uid[0], info.uid[1], info.uid[2], info.uid[3], info.uid[4], info.uid[5], info.uid[6]);
-	    printf ("Batch number:             0x%02x%02x%02x%02x%02x\n", info.batch_number[0], info.batch_number[1], info.batch_number[2], info.batch_number[3], info.batch_number[4]);
-	    printf ("Production date:          week %x, 20%02x\n", info.production_week, info.production_year);
-	    printf ("Hardware Information:\n");
-	    printf ("    Vendor ID:            0x%02x\n", info.hardware.vendor_id);
-	    printf ("    Type:                 0x%02x\n", info.hardware.type);
-	    printf ("    Subtype:              0x%02x\n", info.hardware.subtype);
-	    printf ("    Version:              %d.%d\n", info.hardware.version_major, info.hardware.version_minor);
-	    printf ("    Storage size:         0x%02x (%s%d bytes)\n", info.hardware.storage_size, (info.hardware.storage_size & 1) ? ">" : "=", 1 << (info.hardware.storage_size >> 1));
-	    printf ("    Protocol:             0x%02x\n", info.hardware.protocol);
-	    printf ("Software Information:\n");
-	    printf ("    Vendor ID:            0x%02x\n", info.software.vendor_id);
-	    printf ("    Type:                 0x%02x\n", info.software.type);
-	    printf ("    Subtype:              0x%02x\n", info.software.subtype);
-	    printf ("    Version:              %d.%d\n", info.software.version_major, info.software.version_minor);
-	    printf ("    Storage size:         0x%02x (%s%d bytes)\n", info.software.storage_size, (info.software.storage_size & 1) ? ">" : "=", 1 << (info.software.storage_size >> 1));
-	    printf ("    Protocol:             0x%02x\n", info.software.protocol);
+        size_t count;
+        MifareDESFireAID **aids = malloc(sizeof(MifareDESFireAID*)); 
+        res = mifare_desfire_get_application_ids(tags[i], aids, &count);
 
-	    uint8_t settings;
-	    uint8_t max_keys;
-	    res = mifare_desfire_get_key_settings (tags[i], &settings, &max_keys);
-	    if (res == 0) {
-		printf ("Master Key settings (0x%02x):\n", settings);
-		printf ("    0x%02x configuration changeable;\n", settings & 0x08);
-		printf ("    0x%02x PICC Master Key not required for create / delete;\n", settings & 0x04);
-		printf ("    0x%02x Free directory list access without PICC Master Key;\n", settings & 0x02);
-		printf ("    0x%02x Allow changing the Master Key;\n", settings & 0x01);
-	    } else if (AUTHENTICATION_ERROR == mifare_desfire_last_picc_error (tags[i])) {
-		printf ("Master Key settings: LOCKED\n");
-	    } else {
-		freefare_perror (tags[i], "mifare_desfire_get_key_settings");
-		error = 1;
-		break;
-	    }
-
-	    uint8_t version;
-	    mifare_desfire_get_key_version (tags[i], 0, &version);
-	    printf ("Master Key version: %d (0x%02x)\n", version, version);
-
-	    uint32_t size;
-	    res = mifare_desfire_free_mem (tags[i], &size);
-	    printf ("Free memory: ");
-	    if (0 == res) {
-		printf ("%d bytes\n", size);
-	    } else {
-		printf ("unknown\n");
-	    }
-
-	    printf ("Use random UID: %s\n", (strlen (tag_uid) / 2 == 4) ? "yes" : "no");
+        if(res==0){
+            printf("found %d applicaton/s\n", (int)count);
+            int i;
+            for(i=0; i<count; i++){
+                // Fails here
+                printf("aid %d: %u\n", i, mifare_desfire_aid_get_aid(*(*aids+i*sizeof(MifareDESFireAID))));
+            }
+            printf("ok\n");
+        }else{
+            printf("error res is %d\n", res);
+        }
+        
+        mifare_desfire_key_free (key);
 
 	    free (tag_uid);
 
