@@ -140,16 +140,32 @@ main(int argc, char *argv[])
             break;
         }
 
+        MifareDESFireAID aid = mifare_desfire_aid_new (0x112233);
+		//res = mifare_desfire_create_application (tags[i], aid, 0xFF, 1);
+
         size_t count;
         MifareDESFireAID **aids = malloc(sizeof(MifareDESFireAID*)); 
         res = mifare_desfire_get_application_ids(tags[i], aids, &count);
 
         if(res==0){
             printf("found %d applicaton/s\n", (int)count);
-            int i;
-            for(i=0; i<count; i++){
+            //struct MifareDESFireAID aidArr[count] = *aids;
+            int j;
+            for(j=0; j<count; j++){
                 // Fails here
-                printf("aid %d: %u\n", i, mifare_desfire_aid_get_aid(*(*aids+i*sizeof(MifareDESFireAID))));
+                aid = (*aids)[j];
+                printf("aid %d: %x\n", j, mifare_desfire_aid_get_aid(aid));
+
+                if(mifare_desfire_aid_get_aid(aid) == 0x112233){
+                    if(mifare_desfire_select_application(tags[i], aid) == 0){ 
+                      printf("app selected...\n");
+                      size_t fileCount = 0;
+                      uint8_t **files = malloc(sizeof(uint8_t));
+                      int rra = mifare_desfire_get_file_ids(tags[i], files, &fileCount);
+                      printf("%d found %d file ids\n", rra, (int)fileCount);
+                    }
+                }
+
             }
             printf("ok\n");
         }else{
