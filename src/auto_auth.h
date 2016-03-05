@@ -25,6 +25,6 @@ extern uint8_t key_data_aes[16];
 extern uint8_t key_data_3k3des[24];
 extern const uint8_t key_data_aes_version;
 
-int		 mifare_desfire_auto_authenticate (MifareDESFireKey* key, FreefareTag tag, uint8_t key_no);
+int		 mifare_desfire_auto_authenticate (FreefareTag tag, uint8_t key_no);
 
 #endif

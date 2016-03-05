@@ -28,10 +28,12 @@ uint8_t key_data_3k3des[24]  = { 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01,
 const uint8_t key_data_aes_version = 0x42;
 
 int
-mifare_desfire_auto_authenticate (MifareDESFireKey* key, FreefareTag tag, uint8_t key_no)
+mifare_desfire_auto_authenticate (FreefareTag tag, uint8_t key_no)
 {
     /* Determine which key is currently the master one */
     uint8_t key_version;
+    MifareDESFireKey key; 
+
     int res = mifare_desfire_get_key_version (tag, key_no, &key_version);
 	if(res != 0){
 		printf("Error: mifare_desfire_get_key_version()\n");
@@ -41,19 +43,19 @@ mifare_desfire_auto_authenticate (MifareDESFireKey* key, FreefareTag tag, uint8_
 
     switch (key_version) {
     case 0x00:
-	*key = mifare_desfire_des_key_new_with_version (key_data_null);
+	key = mifare_desfire_des_key_new_with_version (key_data_null);
 	break;
     case 0x42:
-	*key = mifare_desfire_aes_key_new_with_version (key_data_aes, key_data_aes_version);
+	key = mifare_desfire_aes_key_new_with_version (key_data_aes, key_data_aes_version);
 	break;
     case 0xAA:
-	*key = mifare_desfire_des_key_new_with_version (key_data_des);
+	key = mifare_desfire_des_key_new_with_version (key_data_des);
 	break;
     case 0xC7:
-	*key = mifare_desfire_3des_key_new_with_version (key_data_3des);
+	key = mifare_desfire_3des_key_new_with_version (key_data_3des);
 	break;
     case 0x55:
-	*key = mifare_desfire_3k3des_key_new_with_version (key_data_3k3des);
+	key = mifare_desfire_3k3des_key_new_with_version (key_data_3k3des);
 	break;
     default:
 	printf("ERROR: Unknown master key.\n");
@@ -61,7 +63,7 @@ mifare_desfire_auto_authenticate (MifareDESFireKey* key, FreefareTag tag, uint8_
 	//cut_fail ("Unknown master key.");
     }
 
-	if(*key == NULL){
+	if(key == NULL){
 		printf("Error: Cannot allocate key.\n");
 		return 1;
 	}
@@ -72,13 +74,13 @@ mifare_desfire_auto_authenticate (MifareDESFireKey* key, FreefareTag tag, uint8_
     case 0x00:
     case 0xAA:
     case 0xC7:
-	res = mifare_desfire_authenticate (tag, key_no, *key);
+	res = mifare_desfire_authenticate (tag, key_no, key);
 	break;
     case 0x55:
-	res = mifare_desfire_authenticate_iso (tag, key_no, *key);
+	res = mifare_desfire_authenticate_iso (tag, key_no, key);
 	break;
     case 0x42:
-	res = mifare_desfire_authenticate_aes (tag, key_no, *key);
+	res = mifare_desfire_authenticate_aes (tag, key_no, key);
 	break;
     }
 	if(res != 0){
@@ -86,6 +88,7 @@ mifare_desfire_auto_authenticate (MifareDESFireKey* key, FreefareTag tag, uint8_
 		return 1;
 	}
     //cut_assert_equal_int (0, res, cut_message ("mifare_desfire_authenticate()"));
+	mifare_desfire_key_free (key);
 
 	return 0;
 }
