@@ -81,8 +81,8 @@ mifare_desfire_auto_authenticate (MifareDESFireKey* key, FreefareTag tag, uint8_
 	res = mifare_desfire_authenticate_aes (tag, key_no, *key);
 	break;
     }
-	if(res == 0){
-		printf("Error-: mifare_desfire_authenticate()\n");
+	if(res != 0){
+		printf("Error: mifare_desfire_authenticate() key_version: %x\n", key_version);
 		return 1;
 	}
     //cut_assert_equal_int (0, res, cut_message ("mifare_desfire_authenticate()"));
