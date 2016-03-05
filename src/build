@@ -1,1 +1,0 @@
-gcc -o desfire-test desfire-test.c -lnfc -lfreefare -std=c99
